@@ -1,12 +1,8 @@
 const { Client, Events, GatewayIntentBits } = require("discord.js")
 require("dotenv/config")
-const { OpenAIApi, Configuration } = require("openai")
+const OpenAI = require("openai")
 
-const config = new Configuration({
-    apiKey: process.env.OPENAI_KEY
-})
-
-const openai = new OpenAIApi(config)
+const openai = new OpenAI({ apiKey: process.env.OPENAI_KEY })
 
 const client = new Client({
     intents: [
@@ -22,7 +18,7 @@ client.once(Events.ClientReady, (clientUser) => {
 
 client.login(process.env.BOT_TOKEN)
 
-const BOT_CHANNEL = "1067560640526438510"
+const BOT_CHANNEL = "1506694997062324295"
 const PAST_MESSAGES = 5
 
 client.on(Events.MessageCreate, async (message) => {
@@ -35,10 +31,10 @@ client.on(Events.MessageCreate, async (message) => {
         limit: PAST_MESSAGES,
         before: message.id
     }))
-    messages = messages.map(m=>m[1])
+    messages = messages.map(m => m[1])
     messages.unshift(message)
 
-    let users = [...new Set([...messages.map(m=> m.member.displayName), client.user.username])]
+    let users = [...new Set([...messages.map(m => m.member.displayName), client.user.username])]
 
     let lastUser = users.pop()
 
@@ -51,13 +47,12 @@ client.on(Events.MessageCreate, async (message) => {
     prompt += `${client.user.username}:`
     console.log("prompt:", prompt)
 
-    const response = await openai.createCompletion({
-        prompt,
-        model: "text-davinci-003",
-        max_tokens: 500,
-        stop: ["\n"]
+    const response = await openai.chat.completions.create({
+        model: "gpt-3.5-turbo",
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 500
     })
 
-    console.log("response", response.data.choices[0].text)
-    await message.channel.send(response.data.choices[0].text)
+    console.log("response", response.choices[0].message.content)
+    await message.channel.send(response.choices[0].message.content)
 })
