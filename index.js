@@ -2,7 +2,7 @@
 
 const { Client, Events, GatewayIntentBits, EmbedBuilder, ActivityType } = require("discord.js");
 require("dotenv/config");
-const { GoogleGenAI } = require("@google/genai");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const GEMINI_KEY = process.env.GEMINI_KEY;
@@ -12,7 +12,7 @@ const PAST_MESSAGES = 10;
 const COLORS = { gold: '#FFD700', blue: '#54A0FF', purple: '#A55EEA', red: '#FF4757', green: '#2ECC71' };
 const DIVIDER = '▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬';
 
-const genAI = new GoogleGenAI({ apiKey: GEMINI_KEY });
+const genAI = new GoogleGenerativeAI(GEMINI_KEY);
 
 const client = new Client({
     intents: [
