@@ -9,7 +9,7 @@ const GEMINI_KEY = process.env.GEMINI_KEY;
 const BOT_CHANNEL = process.env.BOT_CHANNEL || "";
 const PAST_MESSAGES = 10;
 
-const COLORS = { gold: '#FFD700', blue: '#54A0FF', purple: '#A55EEA', red: '#FF4757' };
+const COLORS = { gold: '#FFD700', blue: '#54A0FF', purple: '#A55EEA', red: '#FF4757', green: '#2ECC71' };
 const DIVIDER = '▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬';
 
 const genAI = new GoogleGenAI({ apiKey: GEMINI_KEY });
@@ -35,6 +35,37 @@ client.on(Events.MessageCreate, async (message) => {
     const wasMentioned = message.mentions.has(client.user);
     if (!inTargetChannel && !wasMentioned) return;
 
+    // ─── !help command ────────────────────────────────────────────────────────
+    if (message.content.toLowerCase() === '!help') {
+        const helpEmbed = new EmbedBuilder()
+            .setColor(COLORS.blue)
+            .setTitle('🤖 Bot Commands')
+            .setDescription(DIVIDER)
+            .addFields(
+                {
+                    name: '💬 Chat with AI',
+                    value: 'Just type normally in this channel, or @mention me anywhere in the server.'
+                },
+                {
+                    name: '❓ !help',
+                    value: 'Shows this command list.'
+                },
+                {
+                    name: '🔁 Context Memory',
+                    value: 'I remember the last 10 messages in the chat for context.'
+                },
+                {
+                    name: '⚡ Model',
+                    value: 'Powered by **Gemini 1.5 Flash** (Free tier)'
+                }
+            )
+            .setFooter({ text: 'AI Assistant • Free & Open Source', iconURL: client.user.displayAvatarURL() })
+            .setTimestamp();
+
+        return message.reply({ embeds: [helpEmbed] });
+    }
+
+    // ─── AI Chat ──────────────────────────────────────────────────────────────
     if (!GEMINI_KEY) {
         return message.reply("> ❌ **Missing Key** — `GEMINI_KEY` is not set.");
     }
