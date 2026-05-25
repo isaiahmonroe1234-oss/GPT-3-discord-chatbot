@@ -35,40 +35,106 @@ client.on(Events.MessageCreate, async (message) => {
     const wasMentioned = message.mentions.has(client.user);
     if (!inTargetChannel && !wasMentioned) return;
 
-    // ─── !help command ────────────────────────────────────────────────────────
-    if (message.content.toLowerCase() === '!help') {
+    const content = message.content.trim();
+
+    // ─── !help ────────────────────────────────────────────────────────────────
+    if (content.toLowerCase() === '!help') {
         const helpEmbed = new EmbedBuilder()
             .setColor(COLORS.blue)
             .setTitle('🤖 Bot Commands')
             .setDescription(DIVIDER)
             .addFields(
-                {
-                    name: '💬 Chat with AI',
-                    value: 'Just type normally in this channel, or @mention me anywhere in the server.'
-                },
-                {
-                    name: '❓ !help',
-                    value: 'Shows this command list.'
-                },
-                {
-                    name: '🔁 Context Memory',
-                    value: 'I remember the last 10 messages in the chat for context.'
-                },
-                {
-                    name: '⚡ Model',
-                    value: 'Powered by **Gemini 1.5 Flash** (Free tier)'
-                }
+                { name: '💬 Chat', value: 'Type normally or @mention me anywhere' },
+                { name: '❓ !help', value: 'Shows this command list' },
+                { name: '🤖 !ask <question>', value: 'Ask the AI a direct question' },
+                { name: '🔥 !roast @user', value: 'Roast someone with AI' },
+                { name: '😂 !joke', value: 'Get a random joke' },
+                { name: '🏓 !ping', value: 'Check if the bot is alive' }
             )
-            .setFooter({ text: 'AI Assistant • Free & Open Source', iconURL: client.user.displayAvatarURL() })
+            .setFooter({ text: 'Powered by Gemini 1.5 Flash (Free)', iconURL: client.user.displayAvatarURL() })
             .setTimestamp();
-
         return message.reply({ embeds: [helpEmbed] });
     }
 
-    // ─── AI Chat ──────────────────────────────────────────────────────────────
-    if (!GEMINI_KEY) {
-        return message.reply("> ❌ **Missing Key** — `GEMINI_KEY` is not set.");
+    // ─── !ping ────────────────────────────────────────────────────────────────
+    if (content.toLowerCase() === '!ping') {
+        const ping = client.ws.ping;
+        const embed = new EmbedBuilder()
+            .setColor(COLORS.green)
+            .setTitle('🏓 Pong!')
+            .setDescription(`Bot is alive!\n\n**Latency:** ${ping}ms\n\n${DIVIDER}`)
+            .setTimestamp();
+        return message.reply({ embeds: [embed] });
     }
+
+    // ─── !joke ────────────────────────────────────────────────────────────────
+    if (content.toLowerCase() === '!joke') {
+        message.channel.sendTyping();
+        try {
+            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+            const result = await model.generateContent("Tell me one short, funny joke. Just the joke, no intro.");
+            const joke = result.response.text();
+            const embed = new EmbedBuilder()
+                .setColor(COLORS.purple)
+                .setTitle('😂 Random Joke')
+                .setDescription(`${joke}\n\n${DIVIDER}`)
+                .setFooter({ text: 'Powered by Gemini', iconURL: client.user.displayAvatarURL() })
+                .setTimestamp();
+            return message.reply({ embeds: [embed] });
+        } catch (err) {
+            return message.reply(`> ❌ Error: ${err.message}`);
+        }
+    }
+
+    // ─── !roast @user ─────────────────────────────────────────────────────────
+    if (content.toLowerCase().startsWith('!roast')) {
+        const target = message.mentions.users.first();
+        const targetName = target ? target.username : "this person";
+        message.channel.sendTyping();
+        try {
+            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+            const result = await model.generateContent(
+                `Write a funny, lighthearted roast for someone named "${targetName}". Keep it playful, not mean. 2-3 sentences max.`
+            );
+            const roast = result.response.text();
+            const embed = new EmbedBuilder()
+                .setColor(COLORS.red)
+                .setTitle(`🔥 Roasting ${targetName}...`)
+                .setDescription(`${roast}\n\n${DIVIDER}`)
+                .setFooter({ text: `Requested by ${message.author.username}`, iconURL: client.user.displayAvatarURL() })
+                .setTimestamp();
+            return message.reply({ embeds: [embed] });
+        } catch (err) {
+            return message.reply(`> ❌ Error: ${err.message}`);
+        }
+    }
+
+    // ─── !ask <question> ──────────────────────────────────────────────────────
+    if (content.toLowerCase().startsWith('!ask ')) {
+        const question = content.slice(5).trim();
+        if (!question) return message.reply('> ❌ Please provide a question! e.g. `!ask what is the meaning of life`');
+        message.channel.sendTyping();
+        try {
+            const model = genAI.getGenerativeModel({
+                model: "gemini-1.5-flash",
+                systemInstruction: "Answer concisely and helpfully. You are a Discord bot assistant."
+            });
+            const result = await model.generateContent(question);
+            const answer = result.response.text();
+            const embed = new EmbedBuilder()
+                .setColor(COLORS.gold)
+                .setAuthor({ name: "AI ASSISTANT", iconURL: "https://cdn-icons-png.flaticon.com/512/471/471663.png" })
+                .setDescription(`**Q: ${question}**\n\n${answer}\n\n${DIVIDER}`)
+                .setFooter({ text: `Asked by ${message.author.username}`, iconURL: client.user.displayAvatarURL() })
+                .setTimestamp();
+            return message.reply({ embeds: [embed] });
+        } catch (err) {
+            return message.reply(`> ❌ Error: ${err.message}`);
+        }
+    }
+
+    // ─── General AI Chat ──────────────────────────────────────────────────────
+    if (!GEMINI_KEY) return message.reply("> ❌ **Missing Key** — `GEMINI_KEY` is not set.");
 
     message.channel.sendTyping();
 
@@ -91,7 +157,7 @@ client.on(Events.MessageCreate, async (message) => {
         });
 
         const chat = model.startChat({ history });
-        const result = await chat.sendMessage(message.content || "Hello!");
+        const result = await chat.sendMessage(content || "Hello!");
         const aiResponse = result.response.text();
 
         const embed = new EmbedBuilder()
