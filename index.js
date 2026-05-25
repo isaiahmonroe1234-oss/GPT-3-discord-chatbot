@@ -9,10 +9,50 @@ const GEMINI_KEY = process.env.GEMINI_KEY;
 const BOT_CHANNEL = process.env.BOT_CHANNEL || "";
 const PAST_MESSAGES = 10;
 
-const COLORS = { gold: '#FFD700', blue: '#54A0FF', purple: '#A55EEA', red: '#FF4757', green: '#2ECC71' };
+const COLORS = { gold: '#FFD700', blue: '#54A0FF', purple: '#A55EEA', red: '#FF4757', green: '#2ECC71', orange: '#FF6B35' };
 const DIVIDER = '▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬';
 
 const genAI = new GoogleGenerativeAI(GEMINI_KEY);
+
+// ─── Rate Limit Tracker ───────────────────────────────────────────────────────
+const rateLimiter = {
+    requests: [],
+    maxPerMinute: 12,
+    cooldowns: new Map(),
+    userCooldownMs: 8000,
+
+    canRequest() {
+        const now = Date.now();
+        this.requests = this.requests.filter(t => now - t < 60000);
+        return this.requests.length < this.maxPerMinute;
+    },
+
+    record() {
+        this.requests.push(Date.now());
+    },
+
+    timeUntilReset() {
+        if (this.requests.length === 0) return 0;
+        const oldest = this.requests[0];
+        return Math.ceil((60000 - (Date.now() - oldest)) / 1000);
+    },
+
+    isUserOnCooldown(userId) {
+        const last = this.cooldowns.get(userId);
+        if (!last) return false;
+        return Date.now() - last < this.userCooldownMs;
+    },
+
+    setUserCooldown(userId) {
+        this.cooldowns.set(userId, Date.now());
+    },
+
+    userTimeLeft(userId) {
+        const last = this.cooldowns.get(userId);
+        if (!last) return 0;
+        return Math.ceil((this.userCooldownMs - (Date.now() - last)) / 1000);
+    }
+};
 
 const client = new Client({
     intents: [
@@ -27,6 +67,52 @@ client.once(Events.ClientReady, (c) => {
     console.log(`[READY] Logged in as ${c.user.tag}`);
     c.user.setActivity("your messages 👀", { type: ActivityType.Watching });
 });
+
+// ─── Helper: run AI with rate limit check ────────────────────────────────────
+async function runAI(message, fn) {
+    const userId = message.author.id;
+
+    if (rateLimiter.isUserOnCooldown(userId)) {
+        const secs = rateLimiter.userTimeLeft(userId);
+        const embed = new EmbedBuilder()
+            .setColor(COLORS.orange)
+            .setTitle('⏳ Slow Down!')
+            .setDescription(`You're sending messages too fast.\n\nPlease wait **${secs}s** before trying again.\n\n${DIVIDER}`)
+            .setTimestamp();
+        return message.reply({ embeds: [embed] });
+    }
+
+    if (!rateLimiter.canRequest()) {
+        const secs = rateLimiter.timeUntilReset();
+        const embed = new EmbedBuilder()
+            .setColor(COLORS.orange)
+            .setTitle('🚦 Rate Limited')
+            .setDescription(`The bot has hit its request limit for this minute.\n\nPlease wait **${secs}s** and try again.\n\n${DIVIDER}`)
+            .setFooter({ text: 'Free tier: 12 requests/minute' })
+            .setTimestamp();
+        return message.reply({ embeds: [embed] });
+    }
+
+    rateLimiter.setUserCooldown(userId);
+    rateLimiter.record();
+
+    try {
+        await fn();
+    } catch (err) {
+        console.error('[AI ERROR]', err.message);
+
+        const isRateLimit = err.message?.includes('429') || err.message?.includes('quota') || err.message?.includes('retry');
+        const embed = new EmbedBuilder()
+            .setColor(isRateLimit ? COLORS.orange : COLORS.red)
+            .setTitle(isRateLimit ? '🚦 Rate Limited by Google' : '❌ AI ERROR')
+            .setDescription(isRateLimit
+                ? `Too many requests to the Gemini API.\n\nPlease wait **15–30 seconds** and try again.\n\n${DIVIDER}`
+                : `> ${err.message}\n\n${DIVIDER}`)
+            .setFooter({ text: isRateLimit ? 'Free tier has limited requests per minute' : 'Something went wrong' })
+            .setTimestamp();
+        await message.reply({ embeds: [embed] });
+    }
+}
 
 client.on(Events.MessageCreate, async (message) => {
     if (message.author.bot) return;
@@ -70,7 +156,7 @@ client.on(Events.MessageCreate, async (message) => {
     // ─── !joke ────────────────────────────────────────────────────────────────
     if (content.toLowerCase() === '!joke') {
         message.channel.sendTyping();
-        try {
+        return runAI(message, async () => {
             const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
             const result = await model.generateContent("Tell me one short, funny joke. Just the joke, no intro.");
             const joke = result.response.text();
@@ -80,10 +166,8 @@ client.on(Events.MessageCreate, async (message) => {
                 .setDescription(`${joke}\n\n${DIVIDER}`)
                 .setFooter({ text: 'Powered by Gemini', iconURL: client.user.displayAvatarURL() })
                 .setTimestamp();
-            return message.reply({ embeds: [embed] });
-        } catch (err) {
-            return message.reply(`> ❌ Error: ${err.message}`);
-        }
+            await message.reply({ embeds: [embed] });
+        });
     }
 
     // ─── !roast @user ─────────────────────────────────────────────────────────
@@ -91,7 +175,7 @@ client.on(Events.MessageCreate, async (message) => {
         const target = message.mentions.users.first();
         const targetName = target ? target.username : "this person";
         message.channel.sendTyping();
-        try {
+        return runAI(message, async () => {
             const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
             const result = await model.generateContent(
                 `Write a funny, lighthearted roast for someone named "${targetName}". Keep it playful, not mean. 2-3 sentences max.`
@@ -103,10 +187,8 @@ client.on(Events.MessageCreate, async (message) => {
                 .setDescription(`${roast}\n\n${DIVIDER}`)
                 .setFooter({ text: `Requested by ${message.author.username}`, iconURL: client.user.displayAvatarURL() })
                 .setTimestamp();
-            return message.reply({ embeds: [embed] });
-        } catch (err) {
-            return message.reply(`> ❌ Error: ${err.message}`);
-        }
+            await message.reply({ embeds: [embed] });
+        });
     }
 
     // ─── !ask <question> ──────────────────────────────────────────────────────
@@ -114,7 +196,7 @@ client.on(Events.MessageCreate, async (message) => {
         const question = content.slice(5).trim();
         if (!question) return message.reply('> ❌ Please provide a question! e.g. `!ask what is the meaning of life`');
         message.channel.sendTyping();
-        try {
+        return runAI(message, async () => {
             const model = genAI.getGenerativeModel({
                 model: "gemini-2.0-flash",
                 systemInstruction: "Answer concisely and helpfully. You are a Discord bot assistant."
@@ -127,10 +209,8 @@ client.on(Events.MessageCreate, async (message) => {
                 .setDescription(`**Q: ${question}**\n\n${answer}\n\n${DIVIDER}`)
                 .setFooter({ text: `Asked by ${message.author.username}`, iconURL: client.user.displayAvatarURL() })
                 .setTimestamp();
-            return message.reply({ embeds: [embed] });
-        } catch (err) {
-            return message.reply(`> ❌ Error: ${err.message}`);
-        }
+            await message.reply({ embeds: [embed] });
+        });
     }
 
     // ─── General AI Chat ──────────────────────────────────────────────────────
@@ -138,7 +218,7 @@ client.on(Events.MessageCreate, async (message) => {
 
     message.channel.sendTyping();
 
-    try {
+    return runAI(message, async () => {
         let rawMessages = Array.from(
             await message.channel.messages.fetch({ limit: PAST_MESSAGES, before: message.id })
         );
@@ -168,13 +248,7 @@ client.on(Events.MessageCreate, async (message) => {
             .setTimestamp();
 
         await message.reply({ embeds: [embed] });
-
-    } catch (err) {
-        console.error('[AI ERROR]', err.message);
-        await message.reply({ embeds: [
-            new EmbedBuilder().setColor(COLORS.red).setTitle('❌ AI ERROR').setDescription(`> ${err.message}`).setTimestamp()
-        ]});
-    }
+    });
 });
 
 client.login(BOT_TOKEN);
