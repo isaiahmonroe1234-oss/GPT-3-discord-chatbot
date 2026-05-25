@@ -51,7 +51,7 @@ client.on(Events.MessageCreate, async (message) => {
                 { name: '😂 !joke', value: 'Get a random joke' },
                 { name: '🏓 !ping', value: 'Check if the bot is alive' }
             )
-            .setFooter({ text: 'Powered by Gemini 1.5 Flash (Free)', iconURL: client.user.displayAvatarURL() })
+            .setFooter({ text: 'Powered by Gemini 2.0 Flash (Free)', iconURL: client.user.displayAvatarURL() })
             .setTimestamp();
         return message.reply({ embeds: [helpEmbed] });
     }
@@ -71,7 +71,7 @@ client.on(Events.MessageCreate, async (message) => {
     if (content.toLowerCase() === '!joke') {
         message.channel.sendTyping();
         try {
-            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+            const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
             const result = await model.generateContent("Tell me one short, funny joke. Just the joke, no intro.");
             const joke = result.response.text();
             const embed = new EmbedBuilder()
@@ -92,7 +92,7 @@ client.on(Events.MessageCreate, async (message) => {
         const targetName = target ? target.username : "this person";
         message.channel.sendTyping();
         try {
-            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+            const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
             const result = await model.generateContent(
                 `Write a funny, lighthearted roast for someone named "${targetName}". Keep it playful, not mean. 2-3 sentences max.`
             );
@@ -116,7 +116,7 @@ client.on(Events.MessageCreate, async (message) => {
         message.channel.sendTyping();
         try {
             const model = genAI.getGenerativeModel({
-                model: "gemini-1.5-flash",
+                model: "gemini-2.0-flash",
                 systemInstruction: "Answer concisely and helpfully. You are a Discord bot assistant."
             });
             const result = await model.generateContent(question);
@@ -152,7 +152,7 @@ client.on(Events.MessageCreate, async (message) => {
         }
 
         const model = genAI.getGenerativeModel({
-            model: "gemini-1.5-flash",
+            model: "gemini-2.0-flash",
             systemInstruction: "You are a helpful, friendly, and witty AI assistant in a Discord server. Keep responses concise and conversational."
         });
 
@@ -164,7 +164,7 @@ client.on(Events.MessageCreate, async (message) => {
             .setColor(COLORS.gold)
             .setAuthor({ name: "AI ASSISTANT", iconURL: "https://cdn-icons-png.flaticon.com/512/471/471663.png" })
             .setDescription(`${aiResponse}\n\n${DIVIDER}`)
-            .setFooter({ text: `Model: Gemini 1.5 Flash (Free)`, iconURL: client.user.displayAvatarURL() })
+            .setFooter({ text: `Model: Gemini 2.0 Flash (Free)`, iconURL: client.user.displayAvatarURL() })
             .setTimestamp();
 
         await message.reply({ embeds: [embed] });
