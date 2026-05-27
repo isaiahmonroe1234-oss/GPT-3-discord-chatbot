@@ -13,8 +13,8 @@ const BOT_CHANNEL = process.env.BOT_CHANNEL || "";
 
 const FREE_MESSAGE_LIMIT  = parseInt(process.env.FREE_MESSAGE_LIMIT  || "10");
 const FREE_WINDOW_MS      = parseInt(process.env.FREE_WINDOW_MS      || "3600000");
-const USER_COOLDOWN_MS    = parseInt(process.env.USER_COOLDOWN_MS    || "8000");
-const MAX_RPM             = parseInt(process.env.MAX_RPM             || "12");
+const USER_COOLDOWN_MS    = parseInt(process.env.USER_COOLDOWN_MS    || "10000"); // increased to 10s
+const MAX_RPM             = parseInt(process.env.MAX_RPM             || "8");     // lowered to 8 (safe below Gemini free tier 15 RPM)
 
 const COLORS = {
     gold:   '#FFD700',
@@ -27,6 +27,24 @@ const COLORS = {
 const DIVIDER = '▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬';
 
 const genAI = new GoogleGenerativeAI(GEMINI_KEY);
+
+// ─── Retry with exponential backoff ──────────────────────────────────────────
+async function withRetry(fn, retries = 3, delayMs = 5000) {
+    for (let attempt = 1; attempt <= retries; attempt++) {
+        try {
+            return await fn();
+        } catch (err) {
+            const isRateLimit = /429|quota|retry|resource.has.been.exhausted/i.test(err.message || '');
+            if (isRateLimit && attempt < retries) {
+                const wait = delayMs * attempt; // 5s, 10s, 15s
+                console.warn(`[RETRY] Gemini rate limited. Attempt ${attempt}/${retries}. Waiting ${wait}ms...`);
+                await new Promise(r => setTimeout(r, wait));
+            } else {
+                throw err;
+            }
+        }
+    }
+}
 
 // ─── Quota tracker ────────────────────────────────────────────────────────────
 const quotaMap = new Map();
@@ -232,10 +250,10 @@ async function runAI(message, fn) {
     rateLimiter.record();
 
     try {
-        await fn();
+        await withRetry(fn); // ← wraps fn with auto-retry on 429
     } catch (err) {
         console.error('[AI ERROR]', err.message);
-        const isRateLimit = /429|quota|retry/i.test(err.message || '');
+        const isRateLimit = /429|quota|retry|resource.has.been.exhausted/i.test(err.message || '');
         await message.reply({
             embeds: [
                 new EmbedBuilder()
@@ -243,7 +261,7 @@ async function runAI(message, fn) {
                     .setTitle(isRateLimit ? '🚦 Rate Limited by Google' : '❌ AI Error')
                     .setDescription(
                         isRateLimit
-                            ? `Too many requests to Gemini.\n\nPlease wait **15–30 seconds** and try again.\n\n${DIVIDER}`
+                            ? `Too many requests to Gemini.\n\nThe bot already retried 3 times. Please wait **30–60 seconds** and try again.\n\n${DIVIDER}`
                             : `> ${err.message}\n\n${DIVIDER}`
                     )
                     .setTimestamp()
@@ -464,3 +482,4 @@ client.on(Events.MessageCreate, async (message) => {
 });
 
 client.login(BOT_TOKEN);
+                                    
