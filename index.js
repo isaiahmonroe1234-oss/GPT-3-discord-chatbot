@@ -344,7 +344,7 @@ client.on(Events.MessageCreate, async (message) => {
     if (content.toLowerCase() === '!joke') {
         message.channel.sendTyping();
         return runAI(message, async () => {
-            const model  = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+            const model  = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-8b' });
             const result = await model.generateContent('Tell me one short, funny joke. Just the joke, no intro.');
             await message.reply({
                 embeds: [
@@ -365,7 +365,7 @@ client.on(Events.MessageCreate, async (message) => {
         const targetName = target ? target.username : 'this person';
         message.channel.sendTyping();
         return runAI(message, async () => {
-            const model  = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+            const model  = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-8b' });
             const result = await model.generateContent(
                 `Write a funny, lighthearted roast for someone named "${targetName}". Keep it playful, not mean. 2-3 sentences max.`
             );
@@ -389,7 +389,7 @@ client.on(Events.MessageCreate, async (message) => {
         message.channel.sendTyping();
         return runAI(message, async () => {
             const model  = genAI.getGenerativeModel({
-                model: 'gemini-2.0-flash',
+                model: 'gemini-1.5-flash-8b',
                 systemInstruction: 'Answer concisely and helpfully. You are a Discord bot assistant.',
             });
             const result = await model.generateContent(question);
@@ -451,7 +451,7 @@ client.on(Events.MessageCreate, async (message) => {
         }
 
         const model  = genAI.getGenerativeModel({
-            model: 'gemini-2.0-flash',
+            model: 'gemini-1.5-flash-8b',
             systemInstruction: 'You are a helpful, friendly, and witty AI assistant in a Discord server. Keep responses concise and conversational.',
         });
 
@@ -482,4 +482,4 @@ client.on(Events.MessageCreate, async (message) => {
 });
 
 client.login(BOT_TOKEN);
-                                    
+    
