@@ -2,7 +2,7 @@
 
 const {
     Client, Events, GatewayIntentBits, EmbedBuilder,
-    ActivityType, PermissionsBitField
+    ActivityType
 } = require("discord.js");
 require("dotenv/config");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
@@ -36,7 +36,7 @@ async function withRetry(fn, retries = 3, delayMs = 5000) {
         } catch (err) {
             const isRateLimit = /429|quota|retry|resource.has.been.exhausted/i.test(err.message || '');
             if (isRateLimit && attempt < retries) {
-                const wait = delayMs * attempt;
+                const wait = delayMs * attempt; // 5s, 10s, 15s
                 console.warn(`[RETRY] Gemini rate limited. Attempt ${attempt}/${retries}. Waiting ${wait}ms...`);
                 await new Promise(r => setTimeout(r, wait));
             } else {
@@ -344,7 +344,7 @@ client.on(Events.MessageCreate, async (message) => {
     if (content.toLowerCase() === '!joke') {
         message.channel.sendTyping();
         return runAI(message, async () => {
-            const model  = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' }); // ← FIXED
+            const model  = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
             const result = await model.generateContent('Tell me one short, funny joke. Just the joke, no intro.');
             await message.reply({
                 embeds: [
@@ -365,7 +365,7 @@ client.on(Events.MessageCreate, async (message) => {
         const targetName = target ? target.username : 'this person';
         message.channel.sendTyping();
         return runAI(message, async () => {
-            const model  = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' }); // ← FIXED
+            const model  = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
             const result = await model.generateContent(
                 `Write a funny, lighthearted roast for someone named "${targetName}". Keep it playful, not mean. 2-3 sentences max.`
             );
@@ -389,7 +389,7 @@ client.on(Events.MessageCreate, async (message) => {
         message.channel.sendTyping();
         return runAI(message, async () => {
             const model  = genAI.getGenerativeModel({
-                model: 'gemini-2.0-flash', // ← FIXED
+                model: 'gemini-2.0-flash',
                 systemInstruction: 'Answer concisely and helpfully. You are a Discord bot assistant.',
             });
             const result = await model.generateContent(question);
@@ -450,8 +450,8 @@ client.on(Events.MessageCreate, async (message) => {
             history.push({ role, parts: [{ text: m.content || '(no text)' }] });
         }
 
-        const model  = genAI.getGenerativeModel({
-            model: 'gemini-2.0-flash', // ← FIXED
+        const model = genAI.getGenerativeModel({
+            model: 'gemini-2.0-flash',
             systemInstruction: 'You are a helpful, friendly, and witty AI assistant in a Discord server. Keep responses concise and conversational.',
         });
 
@@ -459,8 +459,8 @@ client.on(Events.MessageCreate, async (message) => {
         const result = await chat.sendMessage(content || 'Hello!');
 
         let footerText = `Gemini 2.0 Flash (Free) • ${remaining}/${limit} messages left`;
-        if (remaining === 0)      footerText = `⚠️ Last free message used — channel will now lock!`;
-        else if (remaining <= 2)  footerText = `⚠️ Only ${remaining} free message${remaining === 1 ? '' : 's'} left!`;
+        if (remaining === 0)     footerText = `⚠️ Last free message used — channel will now lock!`;
+        else if (remaining <= 2) footerText = `⚠️ Only ${remaining} free message${remaining === 1 ? '' : 's'} left!`;
 
         await message.reply({
             embeds: [
