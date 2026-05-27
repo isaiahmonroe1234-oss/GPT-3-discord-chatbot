@@ -13,8 +13,8 @@ const BOT_CHANNEL = process.env.BOT_CHANNEL || "";
 
 const FREE_MESSAGE_LIMIT  = parseInt(process.env.FREE_MESSAGE_LIMIT  || "10");
 const FREE_WINDOW_MS      = parseInt(process.env.FREE_WINDOW_MS      || "3600000");
-const USER_COOLDOWN_MS    = parseInt(process.env.USER_COOLDOWN_MS    || "10000"); // increased to 10s
-const MAX_RPM             = parseInt(process.env.MAX_RPM             || "8");     // lowered to 8 (safe below Gemini free tier 15 RPM)
+const USER_COOLDOWN_MS    = parseInt(process.env.USER_COOLDOWN_MS    || "10000");
+const MAX_RPM             = parseInt(process.env.MAX_RPM             || "8");
 
 const COLORS = {
     gold:   '#FFD700',
@@ -36,7 +36,7 @@ async function withRetry(fn, retries = 3, delayMs = 5000) {
         } catch (err) {
             const isRateLimit = /429|quota|retry|resource.has.been.exhausted/i.test(err.message || '');
             if (isRateLimit && attempt < retries) {
-                const wait = delayMs * attempt; // 5s, 10s, 15s
+                const wait = delayMs * attempt;
                 console.warn(`[RETRY] Gemini rate limited. Attempt ${attempt}/${retries}. Waiting ${wait}ms...`);
                 await new Promise(r => setTimeout(r, wait));
             } else {
@@ -250,7 +250,7 @@ async function runAI(message, fn) {
     rateLimiter.record();
 
     try {
-        await withRetry(fn); // ← wraps fn with auto-retry on 429
+        await withRetry(fn);
     } catch (err) {
         console.error('[AI ERROR]', err.message);
         const isRateLimit = /429|quota|retry|resource.has.been.exhausted/i.test(err.message || '');
@@ -344,7 +344,7 @@ client.on(Events.MessageCreate, async (message) => {
     if (content.toLowerCase() === '!joke') {
         message.channel.sendTyping();
         return runAI(message, async () => {
-            const model  = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-8b' });
+            const model  = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' }); // ← FIXED
             const result = await model.generateContent('Tell me one short, funny joke. Just the joke, no intro.');
             await message.reply({
                 embeds: [
@@ -365,7 +365,7 @@ client.on(Events.MessageCreate, async (message) => {
         const targetName = target ? target.username : 'this person';
         message.channel.sendTyping();
         return runAI(message, async () => {
-            const model  = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-8b' });
+            const model  = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' }); // ← FIXED
             const result = await model.generateContent(
                 `Write a funny, lighthearted roast for someone named "${targetName}". Keep it playful, not mean. 2-3 sentences max.`
             );
@@ -389,7 +389,7 @@ client.on(Events.MessageCreate, async (message) => {
         message.channel.sendTyping();
         return runAI(message, async () => {
             const model  = genAI.getGenerativeModel({
-                model: 'gemini-1.5-flash-8b',
+                model: 'gemini-2.0-flash', // ← FIXED
                 systemInstruction: 'Answer concisely and helpfully. You are a Discord bot assistant.',
             });
             const result = await model.generateContent(question);
@@ -451,7 +451,7 @@ client.on(Events.MessageCreate, async (message) => {
         }
 
         const model  = genAI.getGenerativeModel({
-            model: 'gemini-1.5-flash-8b',
+            model: 'gemini-2.0-flash', // ← FIXED
             systemInstruction: 'You are a helpful, friendly, and witty AI assistant in a Discord server. Keep responses concise and conversational.',
         });
 
@@ -482,4 +482,3 @@ client.on(Events.MessageCreate, async (message) => {
 });
 
 client.login(BOT_TOKEN);
-    
