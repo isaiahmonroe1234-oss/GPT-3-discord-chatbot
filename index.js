@@ -2,10 +2,9 @@
 
 const {
   Client,
-  Events,
   GatewayIntentBits,
+  Events,
   EmbedBuilder,
-  AttachmentBuilder,
 } = require('discord.js');
 
 require('dotenv').config();
@@ -15,12 +14,7 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const GEMINI_KEY = process.env.GEMINI_KEY;
 const BOT_CHANNEL = process.env.BOT_CHANNEL || '';
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
-
-if (!BOT_TOKEN) throw new Error('Missing BOT_TOKEN');
-if (!GEMINI_KEY) throw new Error('Missing GEMINI_KEY');
-
-const genAI = new GoogleGenerativeAI(GEMINI_KEY);
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite';
 
 const client = new Client({
   intents: [
@@ -30,23 +24,23 @@ const client = new Client({
   ],
 });
 
-client.once(Events.ClientReady, (c) => {
-  console.log(`Logged in as ${c.user.tag}`);
+let genAI = null;
+
+if (GEMINI_KEY) {
+  genAI = new GoogleGenerativeAI(GEMINI_KEY);
+}
+
+client.once(Events.ClientReady, (client) => {
+  console.log(`Logged in as ${client.user.tag}`);
 });
 
-async function askGemini(prompt) {
+async function askAI(prompt) {
+  if (!genAI) {
+    return 'AI is not configured.';
+  }
+
   const model = genAI.getGenerativeModel({
     model: GEMINI_MODEL,
-    systemInstruction: `
-You are a helpful Discord AI bot.
-Never output JSON.
-Never output tool calls.
-Never say dalle.text2im.
-Never say action_input.
-If the user asks for an image, say:
-"I can't generate real images yet, but I can help write a good image prompt."
-Keep replies short and friendly.
-`,
   });
 
   const result = await model.generateContent(prompt);
@@ -59,10 +53,13 @@ client.on(Events.MessageCreate, async (message) => {
 
     const text = message.content.trim();
 
-    const inBotChannel = BOT_CHANNEL && message.channel.id === BOT_CHANNEL;
-    const mentioned = message.mentions.has(client.user);
-
-    if (BOT_CHANNEL && !inBotChannel && !mentioned) return;
+    if (
+      BOT_CHANNEL &&
+      BOT_CHANNEL.length > 0 &&
+      message.channel.id !== BOT_CHANNEL
+    ) {
+      return;
+    }
 
     if (text === '!ping') {
       return message.reply('🏓 Pong! Bot is working.');
@@ -70,46 +67,65 @@ client.on(Events.MessageCreate, async (message) => {
 
     if (text === '!help') {
       return message.reply(
-        '**Commands:**\n`!ping`\n`!ask your question`\nMention me and ask something'
+        [
+          '**Commands**',
+          '`!ping`',
+          '`!help`',
+          '`!ask <question>`',
+          '`!image <prompt>`',
+        ].join('\n')
       );
     }
 
-    if (text.startsWith('!ask')) {
-      const question = text.replace('!ask', '').trim();
+    // FREE IMAGE GENERATION
+    if (text.startsWith('!image ')) {
+      const prompt = text.slice(7).trim();
+
+      if (!prompt) {
+        return message.reply('Please enter an image prompt.');
+      }
+
+      const imageUrl =
+        'https://image.pollinations.ai/prompt/' +
+        encodeURIComponent(prompt);
+
+      const embed = new EmbedBuilder()
+        .setTitle('🖼️ Generated Image')
+        .setDescription(`Prompt: ${prompt}`)
+        .setImage(imageUrl);
+
+      return message.reply({
+        embeds: [embed],
+      });
+    }
+
+    // AI CHAT
+    if (text.startsWith('!ask ')) {
+      const question = text.slice(5).trim();
 
       if (!question) {
-        return message.reply('Type a question after `!ask`.');
+        return message.reply('Please enter a question.');
       }
 
       await message.channel.sendTyping();
 
-      const answer = await askGemini(question);
+      const answer = await askAI(question);
 
       const embed = new EmbedBuilder()
-        .setColor('#2ECC71')
         .setTitle('AI Answer')
-        .setDescription(answer.slice(0, 4000));
+        .setColor('#2ECC71')
+        .setDescription(answer.substring(0, 4000));
 
-      return message.reply({ embeds: [embed] });
+      return message.reply({
+        embeds: [embed],
+      });
     }
+  } catch (error) {
+    console.error(error);
 
-    if (mentioned) {
-      const prompt = text
-        .replace(`<@${client.user.id}>`, '')
-        .replace(`<@!${client.user.id}>`, '')
-        .trim();
-
-      if (!prompt) return message.reply('Hi! Ask me something.');
-
-      await message.channel.sendTyping();
-
-      const answer = await askGemini(prompt);
-
-      return message.reply(answer.slice(0, 1900));
-    }
-  } catch (err) {
-    console.error(err);
-    return message.reply(`❌ Error: ${err.message}`);
+    return message.reply(
+      `❌ Error: ${error.message || 'Unknown error'}`
+    );
   }
 });
 
