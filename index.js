@@ -5,7 +5,7 @@ const {
   Events,
   GatewayIntentBits,
   EmbedBuilder,
-  ActivityType,
+  AttachmentBuilder,
 } = require('discord.js');
 
 require('dotenv').config();
@@ -15,17 +15,10 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const GEMINI_KEY = process.env.GEMINI_KEY;
 const BOT_CHANNEL = process.env.BOT_CHANNEL || '';
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
 
-if (!BOT_TOKEN) {
-  console.error('Missing BOT_TOKEN in .env');
-  process.exit(1);
-}
-
-if (!GEMINI_KEY) {
-  console.error('Missing GEMINI_KEY in .env');
-  process.exit(1);
-}
+if (!BOT_TOKEN) throw new Error('Missing BOT_TOKEN');
+if (!GEMINI_KEY) throw new Error('Missing GEMINI_KEY');
 
 const genAI = new GoogleGenerativeAI(GEMINI_KEY);
 
@@ -37,24 +30,23 @@ const client = new Client({
   ],
 });
 
-const COLORS = {
-  gold: '#FFD700',
-  blue: '#54A0FF',
-  red: '#FF4757',
-  green: '#2ECC71',
-  orange: '#FF6B35',
-};
-
 client.once(Events.ClientReady, (c) => {
   console.log(`Logged in as ${c.user.tag}`);
-  c.user.setActivity('chat messages', { type: ActivityType.Watching });
 });
 
 async function askGemini(prompt) {
   const model = genAI.getGenerativeModel({
     model: GEMINI_MODEL,
-    systemInstruction:
-      'You are a helpful Discord chatbot. Keep replies clear, friendly, and not too long.',
+    systemInstruction: `
+You are a helpful Discord AI bot.
+Never output JSON.
+Never output tool calls.
+Never say dalle.text2im.
+Never say action_input.
+If the user asks for an image, say:
+"I can't generate real images yet, but I can help write a good image prompt."
+Keep replies short and friendly.
+`,
   });
 
   const result = await model.generateContent(prompt);
@@ -65,53 +57,28 @@ client.on(Events.MessageCreate, async (message) => {
   try {
     if (message.author.bot) return;
 
-    const content = message.content.trim();
+    const text = message.content.trim();
 
     const inBotChannel = BOT_CHANNEL && message.channel.id === BOT_CHANNEL;
     const mentioned = message.mentions.has(client.user);
 
     if (BOT_CHANNEL && !inBotChannel && !mentioned) return;
 
-    if (content.toLowerCase() === '!ping') {
+    if (text === '!ping') {
       return message.reply('🏓 Pong! Bot is working.');
     }
 
-    if (content.toLowerCase() === '!help') {
-      const embed = new EmbedBuilder()
-        .setColor(COLORS.blue)
-        .setTitle('🤖 Bot Commands')
-        .setDescription(
-          [
-            '`!ping` - Check if bot works',
-            '`!help` - Show commands',
-            '`!ask <question>` - Ask AI a question',
-            '`!joke` - Get a joke',
-            '',
-            'You can also just mention me and ask something.',
-          ].join('\n')
-        );
-
-      return message.reply({ embeds: [embed] });
+    if (text === '!help') {
+      return message.reply(
+        '**Commands:**\n`!ping`\n`!ask your question`\nMention me and ask something'
+      );
     }
 
-    if (content.toLowerCase() === '!joke') {
-      await message.channel.sendTyping();
-
-      const answer = await askGemini('Tell me one short funny joke.');
-
-      const embed = new EmbedBuilder()
-        .setColor(COLORS.gold)
-        .setTitle('😂 Joke')
-        .setDescription(answer);
-
-      return message.reply({ embeds: [embed] });
-    }
-
-    if (content.toLowerCase().startsWith('!ask ')) {
-      const question = content.slice(5).trim();
+    if (text.startsWith('!ask')) {
+      const question = text.replace('!ask', '').trim();
 
       if (!question) {
-        return message.reply('Please type a question after `!ask`.');
+        return message.reply('Type a question after `!ask`.');
       }
 
       await message.channel.sendTyping();
@@ -119,38 +86,30 @@ client.on(Events.MessageCreate, async (message) => {
       const answer = await askGemini(question);
 
       const embed = new EmbedBuilder()
-        .setColor(COLORS.green)
+        .setColor('#2ECC71')
         .setTitle('AI Answer')
-        .setDescription(answer);
+        .setDescription(answer.slice(0, 4000));
 
       return message.reply({ embeds: [embed] });
     }
 
     if (mentioned) {
-      let prompt = content.replace(`<@${client.user.id}>`, '').replace(`<@!${client.user.id}>`, '').trim();
+      const prompt = text
+        .replace(`<@${client.user.id}>`, '')
+        .replace(`<@!${client.user.id}>`, '')
+        .trim();
 
-      if (!prompt) prompt = 'Hello';
+      if (!prompt) return message.reply('Hi! Ask me something.');
 
       await message.channel.sendTyping();
 
       const answer = await askGemini(prompt);
 
-      return message.reply(answer);
+      return message.reply(answer.slice(0, 1900));
     }
-
-    if (!BOT_CHANNEL) {
-      await message.channel.sendTyping();
-
-      const answer = await askGemini(content);
-
-      return message.reply(answer);
-    }
-  } catch (error) {
-    console.error(error);
-
-    return message.reply(
-      `❌ Error: ${error.message || 'Something went wrong.'}`
-    );
+  } catch (err) {
+    console.error(err);
+    return message.reply(`❌ Error: ${err.message}`);
   }
 });
 
